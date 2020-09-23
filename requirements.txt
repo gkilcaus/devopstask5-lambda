@@ -1,0 +1,2 @@
+aws_lambda_powertools==1.6.0
+wikiquote==0.1.14

@@ -1,0 +1,37 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+    commands:
+      - pip install aws-sam-cli
+  build:
+    commands:
+      - sam validate
+      - sam build
+      - sam package --s3-bucket $S3Bucket --s3-prefix sampkg-code --output-template-file packaged.yaml
+      - |
+        echo "Creating temporary stack"
+        sam deploy --template-file packaged.yaml --stack-name startstopec2-sam-test --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+        testFunction=$(aws cloudformation describe-stacks --stack-name startstopec2-sam-test | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="LambdaFunctionName").OutputValue')
+        statusCode=$(aws lambda invoke --function-name $testFunction --payload '{ "action": "test" }' response.json | jq -r '.StatusCode')
+        cat response.json
+        echo $statusCode
+      - |
+        if [ 200 == $statusCode ]
+        then
+          echo "Updating production stack"
+          sam deploy --template-file packaged.yaml --stack-name startstopec2-sam-app --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+        else
+          echo "Test invocation failed. Skipping update to production stack."
+          exit 500
+        fi
+    finally:
+      - |
+        echo "Deleting temporary stack"
+        aws cloudformation delete-stack --stack-name startstopec2-sam-test
+      

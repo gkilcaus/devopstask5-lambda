@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: 'Performs a scheduled stop/start of Non-production EC2s in all regions.'
+Parameters: 
+  StartSchedulePattern: 
+    Type: String
+    Default: 'cron(0 4 ? * MON-FRI *)'
+    Description: cron expression for starting instances
+  StopSchedulePattern: 
+    Type: String
+    Default: 'cron(0 18 ? * MON-FRI *)'
+    Description: cron expression for stopping instances
+Resources:
+  lambdascheduled:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.8
+      CodeUri: .
+      Description: >-
+        Performs a scheduled stop/start of Non-production EC2s in all regions.
+      MemorySize: 512
+      Timeout: 600
+      Policies:
+        - !Ref StartStopPolicy
+      Tracing: Active
+      Events:
+        StartSchedule:
+          Type: Schedule
+          Properties:
+            Enabled: True
+            Description: Trigger to call lambda function to Start instances
+            Schedule: !Ref StartSchedulePattern
+            Input: '{"action": "start"}'
+        StopSchedule:
+          Type: Schedule
+          Properties:
+            Enabled: True
+            Description: Trigger to call lambda function to Stop instances
+            Schedule: !Ref StopSchedulePattern
+            Input: '{"action": "stop"}'
+  StartStopPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument: 
+        Version: 2012-10-17
+        Statement: 
+          - Effect: Allow
+            Action: 
+              - ec2:StartInstance
+              - ec2:StopInstance
+              - ec2:DescribeInstances
+              - ec2:DescribeRegions
+            Resource: '*'
+Outputs:
+  LambdaFunctionName:
+    Value: !Ref 'lambdascheduled'
